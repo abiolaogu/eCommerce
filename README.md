@@ -1,6 +1,6 @@
 # FusionCommerce Platform
 
-FusionCommerce is an API-first, event-driven, and composable commerce platform built around Apache Kafka, n8n, and AI-driven services. The system decouples customer experiences from core commerce logic and uses modular, headless microservices that can be orchestrated into bespoke customer journeys across digital and physical channels.
+FusionCommerce is an API-first, event-driven, and composable commerce platform built around Apache Kafka, n8n, and AI-driven services. The repository now contains a deployable reference implementation that demonstrates how catalog, order, and inventory microservices collaborate asynchronously through Kafka topics. Each service is designed for containerized CI/CD pipelines and ships with automated tests, TypeScript builds, and Docker artifacts.
 
 ## Architectural Overview
 
@@ -52,6 +52,58 @@ Polyglot persistence ensures each workload uses an optimal datastore.
 - **GitOps Toolchain**: GitLab CI builds and tests workloads, while ArgoCD continuously deploys them across environments.
 - **Cloud & Edge Fabric**: Deployable on private OpenStack clouds or major hyperscalers, with Cloudflare and Voxility delivering secure, low-latency global edge access.
 
+## Deployable Reference Implementation
+
+The repository now ships production-ready Node.js microservices implemented in TypeScript. Each service is containerized, tested, and built around a shared Kafka event contract to illustrate the FusionCommerce nervous system.
+
+### Packages
+
+- `@fusioncommerce/contracts`: Shared event names and payload typings (`order.created`, `inventory.reserved`, `inventory.insufficient`).
+- `@fusioncommerce/event-bus`: Kafka and in-memory event bus implementations with an environment-driven factory for local testing versus production brokers.
+
+### Services
+
+- **Catalog Service (`services/catalog`)** exposes REST endpoints to create and list products while emitting `product.created` events.
+- **Orders Service (`services/orders`)** validates order payloads, persists them in a repository abstraction, and publishes `order.created` messages.
+- **Inventory Service (`services/inventory`)** maintains stock levels, listens for `order.created`, and publishes reservation outcomes to downstream consumers.
+
+Each service offers Fastify-based HTTP APIs, health endpoints, and clean shutdown hooks. Business logic is encapsulated in dedicated service classes with in-memory repositories to keep the sample lightweight while remaining production-ready for replacement with SQL/NoSQL adapters.
+
+### Local Development
+
+```bash
+npm install    # installs dependencies across all workspaces (requires registry access)
+npm run lint   # type-checks each workspace
+npm run test   # runs Jest-based unit tests for all services and packages
+npm run build  # compiles TypeScript to production-ready JavaScript
+```
+
+If your environment restricts access to the public npm registry, you can configure a private mirror or offline cache before running the commands above.
+
+### Container Orchestration
+
+Build and run the entire stack locally with Docker Compose. This spins up Kafka, Zookeeper, the three microservices, and an n8n automation node ready to orchestrate workflows.
+
+```bash
+docker compose up --build
+```
+
+Environment variables:
+
+- `KAFKA_BROKERS` – Comma-separated list of Kafka bootstrap servers (defaults to the local Compose broker).
+- `USE_IN_MEMORY_BUS` – Set to `true` to bypass Kafka and use the in-memory bus for local testing.
+
+### Continuous Delivery
+
+The Dockerfiles located in each service directory implement multi-stage builds that compile TypeScript, prune dev dependencies, and produce small production images. These images can be pushed to any container registry and deployed to Kubernetes or other orchestrators. The `ci` npm script (`npm run ci`) runs linting, unit tests, and builds across all workspaces, enabling a single command for automated pipelines.
+
+## Event-Driven Workflow Example
+
+1. A customer places an order via the Orders service, generating an `order.created` event on Kafka (or the in-memory bus during development).
+2. The Inventory service consumes the event, reserves stock, and emits either `inventory.reserved` or `inventory.insufficient` to notify downstream processors.
+3. n8n reacts to inventory events to trigger fraud checks, notifications, or fulfillment automations.
+4. Catalog updates can drive personalization engines and promotional workflows by emitting `product.created` events to analytic and AI layers.
+
 ## Innovation Mapping
 
 | Innovation Model | Global Inspirations | Enabling Components |
@@ -63,24 +115,6 @@ Polyglot persistence ensures each workload uses an optimal datastore.
 | Gamified Commerce | Temu, Shopee | Wallet & Loyalty Service, AI-driven dynamic rewards, n8n-triggered game mechanics |
 | Open Network Commerce | ONDC (India) | API-first architecture, standardized Kafka events enabling plug-and-play buyer/seller applications |
 
-## Event-Driven Workflow Example
-
-1. A customer places an order via a mobile storefront, generating an `order.created` event on Kafka.
-2. n8n triggers an orchestration that:
-   - Invokes AI fraud scoring.
-   - Reserves inventory in the Inventory service and updates YugabyteDB.
-   - Processes payment through the Wallet & Loyalty service.
-   - Publishes confirmation events consumed by notification services for SMS, email, or chat alerts.
-3. Kafka streams the order data into Apache Druid for real-time monitoring dashboards.
-4. Downstream AI services update personalization models and supply chain forecasts using the same event stream.
-
-## Deployment & Operations Highlights
-
-- Declarative GitOps pipelines ensure consistent rollouts from development through production.
-- Modular services can be scaled independently based on load (e.g., livestream events) while maintaining consistent operational visibility via shared observability stacks.
-- Edge acceleration and zero-trust security patterns protect APIs and customer data while delivering sub-second experiences globally.
-
 ## Additional Resources
 
 The repository includes supplementary diagrams and reference material (PDF and DOCX) that provide visual renderings of the architecture, Kafka event flows, and global infrastructure guidance.
-
