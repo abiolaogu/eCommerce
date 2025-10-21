@@ -18,11 +18,7 @@ export interface KafkaEventBusOptions {
   clientId?: string;
   brokers: string[];
   ssl?: boolean;
-  sasl?: {
-    mechanism: 'plain' | 'scram-sha-256' | 'scram-sha-512' | 'aws';
-    username: string;
-    password: string;
-  };
+  sasl?: any;
   logLevel?: logLevel;
 }
 

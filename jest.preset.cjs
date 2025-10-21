@@ -1,8 +1,16 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  moduleFileExtensions: ['ts', 'js', 'json'],
   transform: {
-    '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: 'tsconfig.base.json' }]
+    '^.+\\.(ts|tsx)?$': [
+      'ts-jest',
+      {
+        // ts-jest configuration goes here
+        tsconfig: '<rootDir>/tsconfig.json'
+      }
+    ]
+  },
+  moduleNameMapper: {
+    '^(\\.\\.?\\/.+)\\.js$': '$1'
   }
 };

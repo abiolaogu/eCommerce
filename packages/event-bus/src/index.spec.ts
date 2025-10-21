@@ -1,7 +1,8 @@
+/// <reference types="jest" />
 import { createEventBusFromEnv, InMemoryEventBus } from './index.js';
 
 describe('createEventBusFromEnv', () => {
-  it('returns in-memory bus when brokers not provided', async () => {
+  it('returns in--memory bus when brokers not provided', async () => {
     const bus = createEventBusFromEnv({});
     expect(bus).toBeInstanceOf(InMemoryEventBus);
   });

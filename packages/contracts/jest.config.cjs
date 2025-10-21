@@ -1,7 +1,12 @@
+const { merge } = require('lodash');
 const baseConfig = require('../../jest.preset.cjs');
 
-module.exports = {
-  ...baseConfig,
+const localConfig = {
   roots: ['<rootDir>/src'],
-  displayName: 'contracts'
+  displayName: 'contracts',
+  moduleNameMapper: {
+    '^@fusioncommerce/(.*)$': '<rootDir>/../../packages/$1/src'
+  }
 };
+
+module.exports = merge({}, baseConfig, localConfig);
