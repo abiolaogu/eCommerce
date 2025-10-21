@@ -1,6 +1,6 @@
 import Fastify, { FastifyInstance } from 'fastify';
-import { EventBus } from '@fusioncommerce/event-bus';
-import { ORDER_CREATED_TOPIC } from '@fusioncommerce/contracts';
+import { EventBus, EventEnvelope } from '@fusioncommerce/event-bus';
+import { ORDER_CREATED_TOPIC, OrderCreatedEvent } from '@fusioncommerce/contracts';
 import { InMemoryInventoryRepository, InventoryRepository } from './inventory-repository.js';
 import { InventoryService } from './inventory-service.js';
 import { ConfigureStockRequest } from './types.js';
@@ -16,7 +16,9 @@ export function buildApp({ eventBus, repository }: BuildInventoryAppOptions): Fa
   const service = new InventoryService(repo, eventBus);
 
   app.addHook('onReady', async () => {
-    await eventBus.subscribe(ORDER_CREATED_TOPIC, (event) => service.handleOrderCreated(event));
+    await eventBus.subscribe<OrderCreatedEvent>(ORDER_CREATED_TOPIC, (event) =>
+      service.handleOrderCreated(event)
+    );
   });
 
   app.get('/health', async () => ({ status: 'ok' }));

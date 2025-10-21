@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "ES2020",
-    "moduleResolution": "Node",
+    "module": "commonjs",
+    "moduleResolution": "node",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
@@ -11,7 +11,7 @@
     "sourceMap": true,
     "outDir": "dist",
     "rootDir": "src",
-    "typeRoots": ["./types", "./node_modules/@types"]
-  },
-  "include": ["src"]
+    "typeRoots": ["./types", "./node_modules/@types"],
+    "types": ["jest", "node"]
+  }
 }

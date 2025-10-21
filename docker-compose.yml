@@ -57,6 +57,18 @@ services:
     ports:
       - "3002:3002"
 
+  group-commerce-service:
+    build:
+      context: .
+      dockerfile: services/group-commerce/Dockerfile
+    environment:
+      - PORT=3003
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      - kafka
+    ports:
+      - "3003:3003"
+
   n8n:
     image: n8nio/n8n:1.70.1
     environment:

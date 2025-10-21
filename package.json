@@ -14,7 +14,9 @@
     "ci": "npm run lint && npm run test && npm run build"
   },
   "devDependencies": {
+    "@types/jest": "latest",
     "jest": "^29.7.0",
+    "lodash": "^4.17.21",
     "ts-jest": "^29.2.5",
     "typescript": "^5.4.5"
   }
