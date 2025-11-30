@@ -1,5 +1,7 @@
 import { createEventBusFromEnv } from '@fusioncommerce/event-bus';
+import { createDatabase } from '@fusioncommerce/database';
 import { buildApp } from './app.js';
+import { PostgresInventoryRepository } from './inventory-repository.js';
 
 const PORT = Number(process.env.PORT ?? 3002);
 const eventBus = createEventBusFromEnv({
@@ -7,11 +9,18 @@ const eventBus = createEventBusFromEnv({
   useInMemoryBus: process.env.USE_IN_MEMORY_BUS
 });
 
-const app = buildApp({ eventBus });
+const db = createDatabase({
+  connectionString: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/ecommerce'
+});
+
+const repository = new PostgresInventoryRepository(db);
+
+const app = buildApp({ eventBus, repository });
 
 app
   .listen({ port: PORT, host: '0.0.0.0' })
-  .then(() => {
+  .then(async () => {
+    await repository.init();
     app.log.info(`Inventory service listening on port ${PORT}`);
   })
   .catch(async (error) => {

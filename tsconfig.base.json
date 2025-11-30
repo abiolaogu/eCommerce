@@ -11,7 +11,22 @@
     "sourceMap": true,
     "outDir": "dist",
     "rootDir": "src",
-    "typeRoots": ["./types", "./node_modules/@types"],
-    "types": ["jest", "node"]
-  }
+    "typeRoots": [
+      "node_modules/@types"
+    ],
+    "types": [
+      "jest",
+      "node"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@fusioncommerce/*": [
+        "packages/*/src"
+      ]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

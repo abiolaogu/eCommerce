@@ -6,6 +6,14 @@ export const GROUP_COMMERCE_CAMPAIGN_CREATED_TOPIC = 'group-commerce.campaign.cr
 export const GROUP_COMMERCE_CAMPAIGN_JOINED_TOPIC = 'group-commerce.campaign.joined';
 export const GROUP_COMMERCE_CAMPAIGN_SUCCESSFUL_TOPIC = 'group-commerce.campaign.successful';
 
+export const PAYMENT_CREATED_TOPIC = 'payment.created';
+export const PAYMENT_SUCCEEDED_TOPIC = 'payment.succeeded';
+export const PAYMENT_FAILED_TOPIC = 'payment.failed';
+
+export const SHIPPING_LABEL_CREATED_TOPIC = 'shipping.label.created';
+
+export type Currency = 'USD' | 'EUR' | 'GBP' | 'JPY';
+
 export interface OrderCreatedEvent {
   orderId: string;
   customerId: string;
@@ -33,11 +41,37 @@ export interface GroupCommerceCampaign {
   status: 'active' | 'successful' | 'failed' | 'expired';
 }
 
-export interface GroupCommerceCampaignCreatedEvent extends GroupCommerceCampaign {}
+export interface GroupCommerceCampaignCreatedEvent extends GroupCommerceCampaign { }
 
 export interface GroupCommerceCampaignJoinedEvent {
   campaign: GroupCommerceCampaign;
   userId: string;
 }
 
-export interface GroupCommerceCampaignSuccessfulEvent extends GroupCommerceCampaign {}
+export interface GroupCommerceCampaignSuccessfulEvent extends GroupCommerceCampaign { }
+
+export interface PaymentCreatedEvent {
+  paymentId: string;
+  orderId: string;
+  amount: number;
+  currency: Currency;
+  status: 'pending' | 'succeeded' | 'failed';
+}
+
+export interface PaymentSucceededEvent {
+  paymentId: string;
+  orderId: string;
+}
+
+export interface PaymentFailedEvent {
+  paymentId: string;
+  orderId: string;
+  reason: string;
+}
+
+export interface ShippingLabelCreatedEvent {
+  orderId: string;
+  trackingNumber: string;
+  carrier: string;
+  labelUrl: string;
+}

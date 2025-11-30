@@ -12,5 +12,6 @@ module.exports = {
   },
   moduleNameMapper: {
     '^(\\.\\.?\\/.+)\\.js$': '$1'
-  }
+  },
+  moduleDirectories: ['node_modules', 'src', 'packages']
 };

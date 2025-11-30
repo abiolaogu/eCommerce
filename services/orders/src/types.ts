@@ -9,6 +9,7 @@ export interface Order {
   customerId: string;
   items: OrderItem[];
   total: number;
+  currency: string;
   status: 'created' | 'confirmed' | 'failed';
   createdAt: string;
 }
@@ -20,4 +21,5 @@ export interface CreateOrderRequest {
     quantity: number;
     price: number;
   }>;
+  currency: string;
 }

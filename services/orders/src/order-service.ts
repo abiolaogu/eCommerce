@@ -5,7 +5,7 @@ import { OrderRepository } from './order-repository.js';
 import { CreateOrderRequest, Order } from './types.js';
 
 export class OrderService {
-  constructor(private readonly repository: OrderRepository, private readonly eventBus: EventBus) {}
+  constructor(private readonly repository: OrderRepository, private readonly eventBus: EventBus) { }
 
   async create(request: CreateOrderRequest): Promise<Order> {
     if (!request.customerId || request.items.length === 0) {
@@ -17,6 +17,7 @@ export class OrderService {
       customerId: request.customerId,
       items: request.items.map((item) => ({ ...item })),
       total,
+      currency: request.currency || 'USD',
       status: 'created',
       createdAt: new Date().toISOString()
     };
