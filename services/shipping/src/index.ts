@@ -1,5 +1,6 @@
 import { createEventBusFromEnv } from '@fusioncommerce/event-bus';
 import { createDatabase } from '@fusioncommerce/database';
+import { createOmniRouteClientFromEnv } from '@fusioncommerce/omniroute-sdk';
 import { buildApp } from './app.js';
 import { PostgresShippingRepository } from './shipping-repository.js';
 
@@ -15,7 +16,13 @@ const db = createDatabase({
 
 const repository = new PostgresShippingRepository(db);
 
-const app = buildApp({ eventBus, repository });
+const omnirouteClient = createOmniRouteClientFromEnv({
+    OMNIROUTE_API_BASE_URL: process.env.OMNIROUTE_API_BASE_URL,
+    OMNIROUTE_API_KEY: process.env.OMNIROUTE_API_KEY,
+    OMNIROUTE_TENANT_ID: process.env.OMNIROUTE_TENANT_ID
+});
+
+const app = buildApp({ eventBus, repository, omnirouteClient });
 
 app
     .listen({ port: PORT, host: '0.0.0.0' })
