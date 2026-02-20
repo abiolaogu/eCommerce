@@ -39,9 +39,14 @@ export interface FusionServiceAdapterConfig {
   ordersServiceUrl: string;
   shippingServiceUrl: string;
   fetchImpl?: typeof fetch;
+  requestTimeoutMs?: number;
+  laneCacheTtlMs?: number;
 }
 
 const normalizeServiceUrl = (value: string): string => value.replace(/\/+$/, '');
+const normalizeLaneCacheKey = (destinationState: string): string => destinationState.trim().toLowerCase();
+const DEFAULT_REQUEST_TIMEOUT_MS = 3000;
+const DEFAULT_LANE_CACHE_TTL_MS = 10000;
 
 const parseServiceResponse = async <T>(response: Response): Promise<T> => {
   if (!response.ok) {
@@ -50,6 +55,37 @@ const parseServiceResponse = async <T>(response: Response): Promise<T> => {
   }
 
   return response.json() as Promise<T>;
+};
+
+const fetchWithTimeout = async ({
+  fetchImpl,
+  timeoutMs,
+  url,
+  init,
+  operation
+}: {
+  fetchImpl: typeof fetch;
+  timeoutMs: number;
+  url: string;
+  init: RequestInit;
+  operation: string;
+}): Promise<Response> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetchImpl(url, {
+      ...init,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Fusion service request timed out (${operation}) after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 export const normalizeFusionPolicyLines = (
@@ -75,48 +111,102 @@ export const createFusionServiceAdapters = (config: FusionServiceAdapterConfig) 
   const fetchImpl = config.fetchImpl ?? fetch;
   const ordersServiceUrl = normalizeServiceUrl(config.ordersServiceUrl);
   const shippingServiceUrl = normalizeServiceUrl(config.shippingServiceUrl);
+  const requestTimeoutMs = config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  const laneCacheTtlMs = config.laneCacheTtlMs ?? DEFAULT_LANE_CACHE_TTL_MS;
+  const laneCache = new Map<string, { value: CoverageLaneResponse[]; expiresAt: number }>();
+  const inFlightLaneRequests = new Map<string, Promise<CoverageLaneResponse[]>>();
 
   return {
     async previewPolicy(input: FusionPolicyPreviewRequest): Promise<PolicyCheckResponse> {
-      const response = await fetchImpl(`${ordersServiceUrl}/orders/policy-preview`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetchWithTimeout({
+        fetchImpl,
+        timeoutMs: requestTimeoutMs,
+        url: `${ordersServiceUrl}/orders/policy-preview`,
+        init: {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            tenantId: input.tenantId,
+            brandId: input.brandId,
+            destinationState: input.destinationState,
+            items: normalizeFusionPolicyLines(input.items),
+          }),
         },
-        body: JSON.stringify({
-          tenantId: input.tenantId,
-          brandId: input.brandId,
-          destinationState: input.destinationState,
-          items: normalizeFusionPolicyLines(input.items),
-        }),
+        operation: 'previewPolicy'
       });
 
       return parseServiceResponse<PolicyCheckResponse>(response);
     },
 
     async createOrder(input: FusionCreateOrderRequest): Promise<Record<string, unknown>> {
-      const response = await fetchImpl(`${ordersServiceUrl}/orders`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetchWithTimeout({
+        fetchImpl,
+        timeoutMs: requestTimeoutMs,
+        url: `${ordersServiceUrl}/orders`,
+        init: {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(input),
         },
-        body: JSON.stringify(input),
+        operation: 'createOrder'
       });
 
       return parseServiceResponse<Record<string, unknown>>(response);
     },
 
     async previewShippingLanes(destinationState: string): Promise<CoverageLaneResponse[]> {
-      const response = await fetchImpl(`${shippingServiceUrl}/shipping/lane-preview`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ destinationState }),
+      const normalizedDestinationState = destinationState.trim();
+      if (!normalizedDestinationState) {
+        return [];
+      }
+
+      const cacheKey = normalizeLaneCacheKey(normalizedDestinationState);
+      const now = Date.now();
+      const cached = laneCache.get(cacheKey);
+      if (cached && cached.expiresAt > now) {
+        return cached.value.map((lane) => ({ ...lane }));
+      }
+
+      const inFlightRequest = inFlightLaneRequests.get(cacheKey);
+      if (inFlightRequest) {
+        return (await inFlightRequest).map((lane) => ({ ...lane }));
+      }
+
+      const requestPromise = (async () => {
+        const response = await fetchWithTimeout({
+          fetchImpl,
+          timeoutMs: requestTimeoutMs,
+          url: `${shippingServiceUrl}/shipping/lane-preview`,
+          init: {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ destinationState: normalizedDestinationState }),
+          },
+          operation: 'previewShippingLanes'
+        });
+
+        const payload = await parseServiceResponse<{ lanes: CoverageLaneResponse[] }>(response);
+
+        if (laneCacheTtlMs > 0) {
+          laneCache.set(cacheKey, {
+            value: payload.lanes.map((lane) => ({ ...lane })),
+            expiresAt: Date.now() + laneCacheTtlMs
+          });
+        }
+
+        return payload.lanes;
+      })().finally(() => {
+        inFlightLaneRequests.delete(cacheKey);
       });
 
-      const payload = await parseServiceResponse<{ lanes: CoverageLaneResponse[] }>(response);
-      return payload.lanes;
+      inFlightLaneRequests.set(cacheKey, requestPromise);
+      return (await requestPromise).map((lane) => ({ ...lane }));
     },
   };
 };

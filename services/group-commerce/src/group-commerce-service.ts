@@ -1,7 +1,10 @@
 import { randomUUID } from 'crypto';
 import { EventBus } from '@fusioncommerce/event-bus';
 import { GroupCommerceRepository } from './group-commerce-repository.js';
-import { CreateGroupCommerceCampaignRequest, GroupCommerceCampaign } from './types.js';
+import { CreateGroupCommerceCampaignRequest, GroupCommerceCampaign, ListCampaignsQuery } from './types.js';
+
+const DEFAULT_LIST_LIMIT = 50;
+const MAX_LIST_LIMIT = 200;
 
 export class GroupCommerceService {
   constructor(
@@ -25,8 +28,10 @@ export class GroupCommerceService {
     return this.repository.findById(id);
   }
 
-  async list(): Promise<GroupCommerceCampaign[]> {
-    return this.repository.findAll();
+  async list(query: ListCampaignsQuery = {}): Promise<GroupCommerceCampaign[]> {
+    const limit = Math.min(MAX_LIST_LIMIT, Math.max(1, Math.floor(query.limit ?? DEFAULT_LIST_LIMIT)));
+    const offset = Math.max(0, Math.floor(query.offset ?? 0));
+    return this.repository.findAll({ limit, offset });
   }
 
   async join(id: string, userId: string): Promise<GroupCommerceCampaign> {

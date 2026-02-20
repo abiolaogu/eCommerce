@@ -1,4 +1,5 @@
 import { InMemoryEventBus } from '@fusioncommerce/event-bus';
+import { OmniRouteClient } from '@fusioncommerce/omniroute-sdk';
 import { buildApp } from './app.js';
 import { ShippingRepository } from './shipping-repository.js';
 import { ShippingLabel } from './types.js';
@@ -35,5 +36,35 @@ describe('shipping service', () => {
         expect(response.statusCode).toBe(201);
         const label = response.json();
         expect(label.carrier).toBe('FedEx');
+    });
+
+    it('previews lanes through omniroute sdk', async () => {
+        const bus = new InMemoryEventBus();
+        const repo = new MockShippingRepository();
+        const mockClient: OmniRouteClient = {
+            evaluateCheckoutPolicy: async () => ({
+                compliant: true,
+                coverageLane: 'National FMCG Channel',
+                expectedSlaHours: 24,
+                checks: [{ category: 'Noodles', quantity: 10, requiredMOQ: 10, compliant: true }],
+                automationNotes: ['MOQ checks passed for all categories.']
+            }),
+            listCoverageLanes: async () => [
+                { laneId: 'lane-1', owner: 'Lagos Mega Distribution', ownerType: 'distributor', slaHours: 30 }
+            ],
+            triggerRebalance: async () => ({ workflowId: 'wf-2', status: 'queued' })
+        };
+
+        const app = buildApp({ eventBus: bus, repository: repo, omnirouteClient: mockClient });
+        const response = await app.inject({
+            method: 'POST',
+            url: '/shipping/lane-preview',
+            payload: {
+                destinationState: 'Lagos'
+            }
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().lanes[0].owner).toBe('Lagos Mega Distribution');
     });
 });

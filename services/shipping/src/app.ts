@@ -1,17 +1,19 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import { EventBus } from '@fusioncommerce/event-bus';
+import { OmniRouteClient } from '@fusioncommerce/omniroute-sdk';
 import { ShippingService } from './shipping-service.js';
 import { ShippingRepository } from './shipping-repository.js';
-import { CreateShippingLabelRequest } from './types.js';
+import { CreateShippingLabelRequest, LanePreviewRequest } from './types.js';
 
 export interface BuildAppOptions {
     eventBus: EventBus;
     repository: ShippingRepository;
+    omnirouteClient?: OmniRouteClient;
 }
 
-export function buildApp({ eventBus, repository }: BuildAppOptions): FastifyInstance {
+export function buildApp({ eventBus, repository, omnirouteClient }: BuildAppOptions): FastifyInstance {
     const app = Fastify({ logger: true });
-    const service = new ShippingService(repository, eventBus);
+    const service = new ShippingService(repository, eventBus, omnirouteClient);
 
     app.get('/health', async () => ({ status: 'ok' }));
 
@@ -22,6 +24,21 @@ export function buildApp({ eventBus, repository }: BuildAppOptions): FastifyInst
                 required: ['orderId', 'address'],
                 properties: {
                     orderId: { type: 'string' },
+                    tenantId: { type: 'string' },
+                    brandId: { type: 'string' },
+                    destinationState: { type: 'string' },
+                    items: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['sku', 'category', 'quantity'],
+                            properties: {
+                                sku: { type: 'string' },
+                                category: { type: 'string' },
+                                quantity: { type: 'integer', minimum: 1 }
+                            }
+                        }
+                    },
                     address: {
                         type: 'object',
                         required: ['street', 'city', 'country', 'zip'],
@@ -52,6 +69,26 @@ export function buildApp({ eventBus, repository }: BuildAppOptions): FastifyInst
             return reply.code(404).send({ message: 'Label not found' });
         }
         return label;
+    });
+
+    app.post<{ Body: LanePreviewRequest }>('/shipping/lane-preview', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['destinationState'],
+                properties: {
+                    destinationState: { type: 'string' }
+                }
+            }
+        }
+    }, async (request, reply) => {
+        try {
+            const lanes = await service.previewLanes(request.body.destinationState);
+            return reply.code(200).send({ lanes });
+        } catch (error) {
+            request.log.error({ err: error }, 'failed to preview shipping lanes');
+            return reply.code(400).send({ message: (error as Error).message });
+        }
     });
 
     return app;

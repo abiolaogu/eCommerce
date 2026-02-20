@@ -24,26 +24,33 @@ const omnirouteClient = createOmniRouteClientFromEnv({
 
 const app = buildApp({ eventBus, repository, omnirouteClient });
 
-app
-  .listen({ port: PORT, host: '0.0.0.0' })
-  .then(async () => {
+const start = async (): Promise<void> => {
+  try {
     await repository.init();
+    await app.listen({ port: PORT, host: '0.0.0.0' });
     app.log.info(`Orders service listening on port ${PORT}`);
-  })
-  .catch(async (error) => {
+  } catch (error) {
     app.log.error({ err: error }, 'failed to start orders service');
     await eventBus.disconnect();
+    await db.destroy();
     process.exit(1);
-  });
+  }
+};
+
+void start();
+
+const shutdown = async (): Promise<void> => {
+  await eventBus.disconnect();
+  await db.destroy();
+  await app.close();
+};
 
 process.on('SIGINT', async () => {
-  await eventBus.disconnect();
-  await app.close();
+  await shutdown();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  await eventBus.disconnect();
-  await app.close();
+  await shutdown();
   process.exit(0);
 });

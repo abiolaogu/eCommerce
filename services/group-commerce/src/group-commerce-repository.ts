@@ -4,7 +4,7 @@ import { GroupCommerceCampaign } from './types.js';
 export interface GroupCommerceRepository {
   create(campaign: GroupCommerceCampaign): Promise<GroupCommerceCampaign>;
   findById(id: string): Promise<GroupCommerceCampaign | null>;
-  findAll(): Promise<GroupCommerceCampaign[]>;
+  findAll(options?: { limit: number; offset: number }): Promise<GroupCommerceCampaign[]>;
   update(id: string, campaign: Partial<GroupCommerceCampaign>): Promise<GroupCommerceCampaign>;
   init(): Promise<void>;
 }
@@ -23,8 +23,12 @@ export class InMemoryGroupCommerceRepository implements GroupCommerceRepository 
     return this.campaigns.get(id) ?? null;
   }
 
-  async findAll(): Promise<GroupCommerceCampaign[]> {
-    return Array.from(this.campaigns.values());
+  async findAll(options?: { limit: number; offset: number }): Promise<GroupCommerceCampaign[]> {
+    const limit = options?.limit ?? this.campaigns.size;
+    const offset = options?.offset ?? 0;
+
+    return Array.from(this.campaigns.values())
+      .slice(offset, offset + limit);
   }
 
   async update(id: string, campaign: Partial<GroupCommerceCampaign>): Promise<GroupCommerceCampaign> {
@@ -57,6 +61,9 @@ export class PostgresGroupCommerceRepository implements GroupCommerceRepository 
         table.string('status').notNullable();
       });
     }
+
+    await this.knex.raw('CREATE INDEX IF NOT EXISTS idx_group_campaign_status_end ON group_commerce_campaigns (status, end_time)');
+    await this.knex.raw('CREATE INDEX IF NOT EXISTS idx_group_campaign_product ON group_commerce_campaigns (product_id)');
   }
 
   async create(campaign: GroupCommerceCampaign): Promise<GroupCommerceCampaign> {
@@ -81,8 +88,14 @@ export class PostgresGroupCommerceRepository implements GroupCommerceRepository 
     return this.mapRowToCampaign(row);
   }
 
-  async findAll(): Promise<GroupCommerceCampaign[]> {
-    const rows = await this.knex('group_commerce_campaigns').select('*');
+  async findAll(options?: { limit: number; offset: number }): Promise<GroupCommerceCampaign[]> {
+    const limit = options?.limit ?? 50;
+    const offset = options?.offset ?? 0;
+    const rows = await this.knex('group_commerce_campaigns')
+      .select('*')
+      .orderBy('start_time', 'desc')
+      .limit(limit)
+      .offset(offset);
     return rows.map((row: any) => this.mapRowToCampaign(row));
   }
 

@@ -46,6 +46,9 @@ services:
       - KAFKA_BROKERS=redpanda:9092
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
+      - OMNIROUTE_API_BASE_URL=${OMNIROUTE_API_BASE_URL}
+      - OMNIROUTE_API_KEY=${OMNIROUTE_API_KEY}
+      - OMNIROUTE_TENANT_ID=${OMNIROUTE_TENANT_ID}
     depends_on:
       - redpanda
     ports:
@@ -100,6 +103,9 @@ services:
       - PORT=3005
       - KAFKA_BROKERS=redpanda:9092
       - DATABASE_URL=${DATABASE_URL}
+      - OMNIROUTE_API_BASE_URL=${OMNIROUTE_API_BASE_URL}
+      - OMNIROUTE_API_KEY=${OMNIROUTE_API_KEY}
+      - OMNIROUTE_TENANT_ID=${OMNIROUTE_TENANT_ID}
     depends_on:
       - redpanda
     ports:

@@ -20,9 +20,13 @@ export class PostgresShippingRepository implements ShippingRepository {
                 table.string('tracking_number').notNullable();
                 table.string('carrier').notNullable();
                 table.string('label_url').notNullable();
+                table.jsonb('orchestration');
                 table.timestamp('created_at').notNullable();
             });
         }
+
+        await this.knex.raw('CREATE INDEX IF NOT EXISTS idx_shipping_labels_order_id ON shipping_labels (order_id)');
+        await this.knex.raw('CREATE INDEX IF NOT EXISTS idx_shipping_labels_created_at ON shipping_labels (created_at DESC)');
     }
 
     async save(label: ShippingLabel): Promise<ShippingLabel> {
@@ -33,6 +37,7 @@ export class PostgresShippingRepository implements ShippingRepository {
                 tracking_number: label.trackingNumber,
                 carrier: label.carrier,
                 label_url: label.labelUrl,
+                orchestration: label.orchestration ? JSON.stringify(label.orchestration) : null,
                 created_at: new Date(label.createdAt)
             })
             .onConflict('id')
@@ -51,13 +56,26 @@ export class PostgresShippingRepository implements ShippingRepository {
         return rows.map((row: any) => this.mapRowToLabel(row));
     }
 
-    private mapRowToLabel(row: { id: string; order_id: string; tracking_number: string; carrier: string; label_url: string; created_at: Date }): ShippingLabel {
+    private mapRowToLabel(row: {
+        id: string;
+        order_id: string;
+        tracking_number: string;
+        carrier: string;
+        label_url: string;
+        orchestration?: any;
+        created_at: Date;
+    }): ShippingLabel {
         return {
             id: row.id,
             orderId: row.order_id,
             trackingNumber: row.tracking_number,
             carrier: row.carrier,
             labelUrl: row.label_url,
+            orchestration: row.orchestration
+                ? typeof row.orchestration === 'string'
+                    ? JSON.parse(row.orchestration)
+                    : row.orchestration
+                : undefined,
             createdAt: row.created_at.toISOString()
         };
     }

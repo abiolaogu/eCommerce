@@ -2,7 +2,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { EventBus } from '@fusioncommerce/event-bus';
 import { CatalogService } from './catalog-service.js';
 import { InMemoryCatalogRepository, CatalogRepository } from './catalog-repository.js';
-import { CreateProductRequest } from './types.js';
+import { CreateProductRequest, ListProductsQuery } from './types.js';
 
 export interface BuildCatalogAppOptions {
   eventBus: EventBus;
@@ -36,7 +36,17 @@ export function buildApp({ eventBus, repository }: BuildCatalogAppOptions): Fast
     return reply.code(201).send(product);
   });
 
-  app.get('/products', async () => service.list());
+  app.get<{ Querystring: ListProductsQuery }>('/products', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', minimum: 1, maximum: 200 },
+          offset: { type: 'integer', minimum: 0 }
+        }
+      }
+    }
+  }, async (request) => service.list(request.query));
 
   return app;
 }

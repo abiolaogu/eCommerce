@@ -2,7 +2,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { EventBus } from '@fusioncommerce/event-bus';
 import { GroupCommerceService } from './group-commerce-service.js';
 import { InMemoryGroupCommerceRepository, GroupCommerceRepository } from './group-commerce-repository.js';
-import { CreateGroupCommerceCampaignRequest, JoinGroupCommerceCampaignRequest } from './types.js';
+import { CreateGroupCommerceCampaignRequest, JoinGroupCommerceCampaignRequest, ListCampaignsQuery } from './types.js';
 
 export interface BuildGroupCommerceAppOptions {
   eventBus: EventBus;
@@ -45,7 +45,17 @@ export function buildApp({ eventBus, repository }: BuildGroupCommerceAppOptions)
     return reply.code(201).send(campaign);
   });
 
-  app.get('/campaigns', async () => service.list());
+  app.get<{ Querystring: ListCampaignsQuery }>('/campaigns', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', minimum: 1, maximum: 200 },
+          offset: { type: 'integer', minimum: 0 }
+        }
+      }
+    }
+  }, async (request) => service.list(request.query));
 
   app.get('/campaigns/:id', async (request) => {
     const { id } = request.params as { id: string };

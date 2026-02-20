@@ -20,11 +20,17 @@ export class InventoryService {
   }
 
   async handleOrderCreated(event: EventEnvelope<OrderCreatedEvent>): Promise<void> {
-    const results: InventoryReservation[] = [];
-    for (const item of event.payload.items) {
-      const reservation = await this.repository.reserve(event.payload.orderId, item.sku, item.quantity);
-      results.push(reservation);
-    }
+    const quantitiesBySku = event.payload.items.reduce((accumulator, item) => {
+      accumulator.set(item.sku, (accumulator.get(item.sku) ?? 0) + item.quantity);
+      return accumulator;
+    }, new Map<string, number>());
+
+    const results: InventoryReservation[] = await Promise.all(
+      Array.from(quantitiesBySku.entries()).map(([sku, quantity]) =>
+        this.repository.reserve(event.payload.orderId, sku, quantity)
+      )
+    );
+
     const failed = results.find((result) => result.status === 'insufficient');
     if (failed) {
       const failureEvent: InventoryStatusEvent = {

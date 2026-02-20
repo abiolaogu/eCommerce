@@ -46,4 +46,33 @@ describe('group commerce service', () => {
     const updatedCampaign = joinResponse.json();
     expect(updatedCampaign.actualParticipants).toBe(1);
   });
+
+  it('supports paginated campaign listing', async () => {
+    const bus = new InMemoryEventBus();
+    const app = buildApp({ eventBus: bus });
+
+    for (let index = 0; index < 3; index += 1) {
+      await app.inject({
+        method: 'POST',
+        url: '/campaigns',
+        payload: {
+          productId: `product-${index}`,
+          minParticipants: 2,
+          maxParticipants: 10,
+          price: 10,
+          originalPrice: 20,
+          startTime: new Date().toISOString(),
+          endTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        }
+      });
+    }
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/campaigns?limit=2&offset=1'
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toHaveLength(2);
+  });
 });
