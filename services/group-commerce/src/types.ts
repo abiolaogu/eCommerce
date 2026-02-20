@@ -24,3 +24,8 @@ export interface CreateGroupCommerceCampaignRequest {
 export interface JoinGroupCommerceCampaignRequest {
   userId: string;
 }
+
+export interface ListCampaignsQuery {
+  limit?: number;
+  offset?: number;
+}

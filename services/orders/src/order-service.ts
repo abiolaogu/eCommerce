@@ -8,7 +8,10 @@ import {
 } from '@fusioncommerce/omniroute-sdk';
 import { randomUUID } from 'crypto';
 import { OrderRepository } from './order-repository.js';
-import { CreateOrderRequest, Order, PolicyPreviewRequest } from './types.js';
+import { CreateOrderRequest, ListOrdersQuery, Order, PolicyPreviewRequest } from './types.js';
+
+const DEFAULT_LIST_LIMIT = 50;
+const MAX_LIST_LIMIT = 200;
 
 export class OrderService {
   constructor(
@@ -79,7 +82,10 @@ export class OrderService {
     return order;
   }
 
-  async list(): Promise<Order[]> {
-    return this.repository.all();
+  async list(query: ListOrdersQuery = {}): Promise<Order[]> {
+    const limit = Math.min(MAX_LIST_LIMIT, Math.max(1, Math.floor(query.limit ?? DEFAULT_LIST_LIMIT)));
+    const offset = Math.max(0, Math.floor(query.offset ?? 0));
+
+    return this.repository.all({ limit, offset });
   }
 }

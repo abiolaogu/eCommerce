@@ -20,7 +20,8 @@
         "pg": "^8.11.3",
         "@fusioncommerce/contracts": "1.0.0",
         "@fusioncommerce/event-bus": "1.0.0",
-        "@fusioncommerce/database": "1.0.0"
+        "@fusioncommerce/database": "1.0.0",
+        "@fusioncommerce/omniroute-sdk": "1.0.0"
     },
     "devDependencies": {
         "@types/node": "^20.11.24",

@@ -27,23 +27,34 @@ export class ShippingService {
 
     async createLabel(request: CreateShippingLabelRequest): Promise<ShippingLabel> {
         // Real integration with a shipping provider (e.g. Shippo/EasyPost)
-        // For this demo, we simulate a real HTTP call to a carrier API
         let selectedLane: CoverageLaneResponse | undefined;
         let policyCompliant: boolean | undefined;
+        const canPreviewLanes = Boolean(this.omnirouteClient && request.destinationState);
+        const canEvaluatePolicy = Boolean(
+            this.omnirouteClient &&
+            request.brandId &&
+            request.destinationState &&
+            request.items?.length
+        );
 
-        if (this.omnirouteClient && request.destinationState) {
-            const lanes = await this.omnirouteClient.listCoverageLanes(request.destinationState);
-            selectedLane = lanes[0];
-        }
+        const [lanes, policy] = await Promise.all([
+            canPreviewLanes
+                ? this.omnirouteClient!.listCoverageLanes(request.destinationState!)
+                : Promise.resolve(undefined),
+            canEvaluatePolicy
+                ? this.omnirouteClient!.evaluateCheckoutPolicy(
+                    mapFusionOrderToPolicyRequest({
+                        brandId: request.brandId!,
+                        destinationState: request.destinationState!,
+                        items: normalizeFusionPolicyLines(request.items!)
+                    })
+                )
+                : Promise.resolve(undefined)
+        ]);
 
-        if (this.omnirouteClient && request.brandId && request.destinationState && request.items?.length) {
-            const policy = await this.omnirouteClient.evaluateCheckoutPolicy(
-                mapFusionOrderToPolicyRequest({
-                    brandId: request.brandId,
-                    destinationState: request.destinationState,
-                    items: normalizeFusionPolicyLines(request.items)
-                })
-            );
+        selectedLane = lanes?.[0];
+
+        if (policy) {
             policyCompliant = policy.compliant;
             if (!selectedLane && policy.coverageLane) {
                 selectedLane = {
@@ -58,9 +69,6 @@ export class ShippingService {
         const carrier = selectedLane?.ownerType === 'logistics_aggregator'
             ? 'Aggregator Network'
             : 'FedEx';
-
-        // Simulate API latency
-        await new Promise(resolve => setTimeout(resolve, 500));
 
         // Simulate API response
         const trackingNumber = `TRK-${randomUUID().substring(0, 8).toUpperCase()}`;

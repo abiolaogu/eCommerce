@@ -2,7 +2,7 @@ import { Product } from './types.js';
 
 export interface CatalogRepository {
   create(product: Product): Promise<Product>;
-  all(): Promise<Product[]>;
+  all(options?: { limit: number; offset: number }): Promise<Product[]>;
 }
 
 export class InMemoryCatalogRepository implements CatalogRepository {
@@ -13,7 +13,10 @@ export class InMemoryCatalogRepository implements CatalogRepository {
     return product;
   }
 
-  async all(): Promise<Product[]> {
-    return Array.from(this.products.values());
+  async all(options?: { limit: number; offset: number }): Promise<Product[]> {
+    const limit = options?.limit ?? this.products.size;
+    const offset = options?.offset ?? 0;
+
+    return Array.from(this.products.values()).slice(offset, offset + limit);
   }
 }

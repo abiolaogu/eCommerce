@@ -2,6 +2,9 @@ export interface OmniRouteClientConfig {
   baseUrl: string;
   apiKey: string;
   tenantId?: string;
+  fetchImpl?: typeof fetch;
+  requestTimeoutMs?: number;
+  coverageLaneCacheTtlMs?: number;
 }
 
 export interface OmniRouteEnvConfig {
@@ -50,6 +53,14 @@ export interface OmniRouteClient {
   }): Promise<{ workflowId: string; status: string }>;
 }
 
+interface CachedCoverageLanes {
+  value: CoverageLaneResponse[];
+  expiresAt: number;
+}
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 3000;
+const DEFAULT_COVERAGE_LANE_CACHE_TTL_MS = 15000;
+
 export const createOmniRouteClientFromEnv = (
   env: OmniRouteEnvConfig
 ): OmniRouteClient | undefined => {
@@ -86,40 +97,130 @@ const parseJson = async <T>(response: Response): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
+const cloneCoverageLanes = (lanes: CoverageLaneResponse[]): CoverageLaneResponse[] =>
+  lanes.map((lane) => ({ ...lane }));
+
+const fetchJson = async <T>({
+  fetchImpl,
+  url,
+  init,
+  timeoutMs,
+  operation
+}: {
+  fetchImpl: typeof fetch;
+  url: string;
+  init: RequestInit;
+  timeoutMs: number;
+  operation: string;
+}): Promise<T> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetchImpl(url, {
+      ...init,
+      signal: controller.signal
+    });
+
+    return parseJson<T>(response);
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`OmniRoute API request timed out (${operation}) after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const normalizeBaseUrl = (value: string): string => value.replace(/\/+$/, '');
+const normalizeCoverageLaneCacheKey = (destinationState: string): string => destinationState.trim().toLowerCase();
+
 export const createOmniRouteClient = (config: OmniRouteClientConfig): OmniRouteClient => {
   const headers = buildHeaders(config);
+  const fetchImpl = config.fetchImpl ?? fetch;
+  const baseUrl = normalizeBaseUrl(config.baseUrl);
+  const requestTimeoutMs = config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  const coverageLaneCacheTtlMs = config.coverageLaneCacheTtlMs ?? DEFAULT_COVERAGE_LANE_CACHE_TTL_MS;
+  const coverageLaneCache = new Map<string, CachedCoverageLanes>();
+  const inFlightCoverageLaneRequests = new Map<string, Promise<CoverageLaneResponse[]>>();
 
   return {
     async evaluateCheckoutPolicy(input: PolicyCheckRequest): Promise<PolicyCheckResponse> {
-      const response = await fetch(`${config.baseUrl}/v1/orchestration/checkout-policy`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(input),
+      return fetchJson<PolicyCheckResponse>({
+        fetchImpl,
+        url: `${baseUrl}/v1/orchestration/checkout-policy`,
+        init: {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(input),
+        },
+        timeoutMs: requestTimeoutMs,
+        operation: 'evaluateCheckoutPolicy'
       });
-
-      return parseJson<PolicyCheckResponse>(response);
     },
 
     async listCoverageLanes(destinationState: string): Promise<CoverageLaneResponse[]> {
-      const url = new URL(`${config.baseUrl}/v1/orchestration/coverage-lanes`);
-      url.searchParams.set('destinationState', destinationState);
+      const normalizedDestinationState = destinationState.trim();
+      if (!normalizedDestinationState) {
+        return [];
+      }
 
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers,
+      const cacheKey = normalizeCoverageLaneCacheKey(normalizedDestinationState);
+      const now = Date.now();
+      const cached = coverageLaneCache.get(cacheKey);
+      if (cached && cached.expiresAt > now) {
+        return cloneCoverageLanes(cached.value);
+      }
+
+      const inFlightRequest = inFlightCoverageLaneRequests.get(cacheKey);
+      if (inFlightRequest) {
+        return cloneCoverageLanes(await inFlightRequest);
+      }
+
+      const requestPromise = (async () => {
+        const url = new URL(`${baseUrl}/v1/orchestration/coverage-lanes`);
+        url.searchParams.set('destinationState', normalizedDestinationState);
+
+        const lanes = await fetchJson<CoverageLaneResponse[]>({
+          fetchImpl,
+          url: url.toString(),
+          init: {
+            method: 'GET',
+            headers,
+          },
+          timeoutMs: requestTimeoutMs,
+          operation: 'listCoverageLanes'
+        });
+
+        if (coverageLaneCacheTtlMs > 0) {
+          coverageLaneCache.set(cacheKey, {
+            value: cloneCoverageLanes(lanes),
+            expiresAt: Date.now() + coverageLaneCacheTtlMs
+          });
+        }
+
+        return lanes;
+      })().finally(() => {
+        inFlightCoverageLaneRequests.delete(cacheKey);
       });
 
-      return parseJson<CoverageLaneResponse[]>(response);
+      inFlightCoverageLaneRequests.set(cacheKey, requestPromise);
+      return cloneCoverageLanes(await requestPromise);
     },
 
     async triggerRebalance(payload): Promise<{ workflowId: string; status: string }> {
-      const response = await fetch(`${config.baseUrl}/v1/orchestration/rebalance`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
+      return fetchJson<{ workflowId: string; status: string }>({
+        fetchImpl,
+        url: `${baseUrl}/v1/orchestration/rebalance`,
+        init: {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+        },
+        timeoutMs: requestTimeoutMs,
+        operation: 'triggerRebalance'
       });
-
-      return parseJson<{ workflowId: string; status: string }>(response);
     },
   };
 };

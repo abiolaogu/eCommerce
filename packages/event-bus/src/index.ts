@@ -26,6 +26,8 @@ export class KafkaEventBus implements EventBus {
   private readonly kafka: Kafka;
   private readonly producer: Producer;
   private readonly consumers: Map<string, Consumer> = new Map();
+  private producerConnectPromise?: Promise<void>;
+  private producerConnected = false;
 
   constructor(private readonly options: KafkaEventBusOptions) {
     this.kafka = new Kafka({
@@ -39,7 +41,7 @@ export class KafkaEventBus implements EventBus {
   }
 
   async publish<T>(topic: string, payload: T): Promise<void> {
-    await this.producer.connect();
+    await this.ensureProducerConnected();
     const message: Message = {
       value: JSON.stringify(payload),
       timestamp: Date.now().toString()
@@ -70,7 +72,33 @@ export class KafkaEventBus implements EventBus {
         await consumer.disconnect();
       })
     );
-    await this.producer.disconnect();
+    this.consumers.clear();
+
+    if (this.producerConnected || this.producerConnectPromise) {
+      await this.producer.disconnect();
+    }
+
+    this.producerConnected = false;
+    this.producerConnectPromise = undefined;
+  }
+
+  private async ensureProducerConnected(): Promise<void> {
+    if (this.producerConnected) {
+      return;
+    }
+
+    if (!this.producerConnectPromise) {
+      this.producerConnectPromise = this.producer.connect()
+        .then(() => {
+          this.producerConnected = true;
+        })
+        .catch((error) => {
+          this.producerConnectPromise = undefined;
+          throw error;
+        });
+    }
+
+    await this.producerConnectPromise;
   }
 }
 

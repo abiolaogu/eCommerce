@@ -4,7 +4,7 @@ import { Order } from './types.js';
 export interface OrderRepository {
   save(order: Order): Promise<Order>;
   findById(id: string): Promise<Order | null>;
-  all(): Promise<Order[]>;
+  all(options?: { limit: number; offset: number }): Promise<Order[]>;
   init(): Promise<void>;
 }
 
@@ -22,8 +22,13 @@ export class InMemoryOrderRepository implements OrderRepository {
     return this.orders.get(id) ?? null;
   }
 
-  async all(): Promise<Order[]> {
-    return Array.from(this.orders.values());
+  async all(options?: { limit: number; offset: number }): Promise<Order[]> {
+    const limit = options?.limit ?? this.orders.size;
+    const offset = options?.offset ?? 0;
+
+    return Array.from(this.orders.values())
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(offset, offset + limit);
   }
 }
 
@@ -36,13 +41,20 @@ export class PostgresOrderRepository implements OrderRepository {
       await this.knex.schema.createTable('orders', (table: Knex.CreateTableBuilder) => {
         table.string('id').primary();
         table.string('customer_id').notNullable();
+        table.string('brand_id');
+        table.string('destination_state');
         table.jsonb('items').notNullable();
         table.decimal('total', 10, 2).notNullable();
         table.string('currency').notNullable();
         table.string('status').notNullable();
+        table.jsonb('orchestration');
         table.timestamp('created_at').defaultTo(this.knex.fn.now());
       });
     }
+
+    await this.knex.raw('CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders (created_at DESC)');
+    await this.knex.raw('CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders (customer_id)');
+    await this.knex.raw('CREATE INDEX IF NOT EXISTS idx_orders_brand_destination ON orders (brand_id, destination_state)');
   }
 
   async save(order: Order): Promise<Order> {
@@ -50,10 +62,13 @@ export class PostgresOrderRepository implements OrderRepository {
       .insert({
         id: order.id,
         customer_id: order.customerId,
+        brand_id: order.brandId ?? null,
+        destination_state: order.destinationState ?? null,
         items: JSON.stringify(order.items),
         total: order.total,
         currency: order.currency,
         status: order.status,
+        orchestration: order.orchestration ? JSON.stringify(order.orchestration) : null,
         created_at: new Date(order.createdAt)
       })
       .onConflict('id')
@@ -67,19 +82,43 @@ export class PostgresOrderRepository implements OrderRepository {
     return this.mapRowToOrder(row);
   }
 
-  async all(): Promise<Order[]> {
-    const rows = await this.knex('orders').select('*');
+  async all(options?: { limit: number; offset: number }): Promise<Order[]> {
+    const limit = options?.limit ?? 50;
+    const offset = options?.offset ?? 0;
+    const rows = await this.knex('orders')
+      .select('*')
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+      .offset(offset);
     return rows.map((row) => this.mapRowToOrder(row));
   }
 
-  private mapRowToOrder(row: { id: string; customer_id: string; items: any; total: string; currency: string; status: any; created_at: Date }): Order {
+  private mapRowToOrder(row: {
+    id: string;
+    customer_id: string;
+    brand_id?: string | null;
+    destination_state?: string | null;
+    items: any;
+    total: string;
+    currency: string;
+    status: any;
+    orchestration?: any;
+    created_at: Date;
+  }): Order {
     return {
       id: row.id,
       customerId: row.customer_id,
+      brandId: row.brand_id ?? undefined,
+      destinationState: row.destination_state ?? undefined,
       items: typeof row.items === 'string' ? JSON.parse(row.items) : row.items,
       total: Number(row.total),
       currency: row.currency,
       status: row.status,
+      orchestration: row.orchestration
+        ? typeof row.orchestration === 'string'
+          ? JSON.parse(row.orchestration)
+          : row.orchestration
+        : undefined,
       createdAt: row.created_at.toISOString()
     };
   }

@@ -16,3 +16,8 @@ export interface CreateProductRequest {
   currency: string;
   inventory: number;
 }
+
+export interface ListProductsQuery {
+  limit?: number;
+  offset?: number;
+}

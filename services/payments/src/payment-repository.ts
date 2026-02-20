@@ -23,6 +23,9 @@ export class PostgresPaymentRepository implements PaymentRepository {
                 table.timestamp('created_at').notNullable();
             });
         }
+
+        await this.knex.raw('CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments (order_id)');
+        await this.knex.raw('CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments (created_at DESC)');
     }
 
     async save(payment: Payment): Promise<Payment> {

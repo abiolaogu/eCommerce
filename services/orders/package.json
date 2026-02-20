@@ -17,6 +17,7 @@
     "@fusioncommerce/contracts": "1.0.0",
     "@fusioncommerce/database": "file:../../packages/database",
     "@fusioncommerce/event-bus": "1.0.0",
+    "@fusioncommerce/omniroute-sdk": "1.0.0",
     "fastify": "^4.26.2",
     "pino": "^9.1.0",
     "uuid": "^9.0.1"
